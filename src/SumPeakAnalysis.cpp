@@ -8,13 +8,13 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 #include <iostream>
-#include "TFile.h" // needed for GetRunNumber
 #include "TGRSIUtilities.h"
 #include "TParserLibrary.h"
 #include "TEnv.h"
 
 #include "SumPeakAnalysis.h"
-#include "BGUtils.h"
+//#include "BGUtils.h"
+#include "HistogramManager.h"
 
 
 int main(int argc, char **argv)
@@ -42,8 +42,14 @@ int main(int argc, char **argv)
         }
     }
 
-    BGUtils BGUtils(source_file, bg_file);
-    BGUtils.SubtractAllBackground();
+    // Background subtraction
+    //BGUtils BGUtils(source_file, bg_file);
+    //BGUtils.SubtractAllBackground();
+
+    // sum peak gating
+    HistogramManager *hist_man = new HistogramManager();
+    hist_man->BuildAngularMatrices(source_file, bg_file);
+
 
     return 0;
 } // main()

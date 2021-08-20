@@ -5,7 +5,7 @@
 #define SumPeakAnalysis_VERSION_MAJOR @SumPeakAnalysis_VERSION_MAJOR@
 #define SumPeakAnalysis_VERSION_MINOR @SumPeakAnalysis_VERSION_MINOR@
 
-#include "Notifier.h"
+#include "TFile.h"
 
 int main(int argc, char **argv);
 void InitGRSISort();

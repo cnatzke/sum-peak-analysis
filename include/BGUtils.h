@@ -21,9 +21,10 @@ private:
     float bg_channel_scaling[51] = {0.92, 0.95, 0.95, 0.95, 0.95, 0.95, 0.95, 1.0580895110765016, 1.0339742044932556, 0.8747156278958534, 0.8033889245081004, 1.0, 1.1403694659508572, 0.7029288227912965, 1.0, 0.9409631373154851, 0.678758047090022, 1.0, 0.9947705181210781, 1.0, 1.0, 1.2474602249799396, 0.5311862244686293, 0.253477632178042, 1.109379327867466, 1.0646027460335425, 0.5024527801938472, 0.0, 0.5338144648523754, 1.0, 0.6525205449313747, 0.7095533856730193, 1.0, 1.3861438813414484, 1.0, 1.0, 1.0, 1.0, 1.0156872014663187, 0.9394285311346517, 0.6920891718141803, 0.9, 1.0, 0.6953137336877294, 0.9806348544049973, 0.95, 0.95, 1.0, 1.1, 0.9, 0.9841227196603527};
 public:
     BGUtils(TFile *source_file, TFile *bg_file);
+    ~BGUtils(void);
     void SubtractAllBackground();
     void FindAvgTimeRandom(TFile *h);
-    void SubtractAngleDependentBg();
+    void SubtractAngleDependentBg(bool optimize_values = false);
     void MakeAngleHistograms();
     void CreateAngleMatrix(TFile *histogram_file);
     float OptimizeBGScaleFactor(TH1D* src_h, TH1D* bg_h, int peak, float init_guess, float steps = 100);
