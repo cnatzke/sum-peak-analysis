@@ -8,12 +8,14 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 #include <iostream>
+#include <map>
 #include "TGRSIUtilities.h"
 #include "TParserLibrary.h"
 #include "TEnv.h"
 
 #include "SumPeakAnalysis.h"
-//#include "BGUtils.h"
+#include "FileHandler.h"
+#include "BGUtils.h"
 #include "HistogramManager.h"
 
 
@@ -26,30 +28,31 @@ int main(int argc, char **argv)
 
     if (argc == 3) {
         InitGRSISort();
-        source_file =  new TFile(argv[1]);
-        if (source_file->IsZombie()) {
-            std::cout << "Error opening source file" << std::endl;
-            exit(-1);
-        } else {
-            std::cout << "Found source file: " << source_file->GetName() << std::endl;
-        }
-        bg_file = new TFile(argv[2]);
-        if (bg_file->IsZombie()) {
-            std::cout << "Error opening background file" << std::endl;
-            exit(-1);
-        } else {
-            std::cout << "Found background file: " << bg_file->GetName() << std::endl;
-        }
+        // makes output look nicer
+        std::cout << std::endl;
+        // read in data files
+        FileHandler * inputs = new FileHandler(argv[1], argv[2]);
+
+        // Background subtraction
+        BGUtils *bg_utils = new BGUtils(inputs);
+        bg_utils->SubtractAllBackground();
+
+        /*
+           // Background subtraction
+           BGUtils *bg_utils = new BGUtils(source_file, bg_file);
+           bg_utils->OptimizeBGScaling(false);
+           bg_utils->SubtractAllBackground();
+           std::map<int, float> bg_scaling_factors_map = bg_utils->GetBgScalingFactors();
+
+           // sum peak gating
+           HistogramManager *hist_man = new HistogramManager();
+           hist_man->BuildAngularMatrices(source_file, bg_file, bg_scaling_factors_map);
+         */
+
+        // cleaning up
+        delete inputs;
+        delete bg_utils;
     }
-
-    // Background subtraction
-    //BGUtils BGUtils(source_file, bg_file);
-    //BGUtils.SubtractAllBackground();
-
-    // sum peak gating
-    HistogramManager *hist_man = new HistogramManager();
-    hist_man->BuildAngularMatrices(source_file, bg_file);
-
 
     return 0;
 } // main()
