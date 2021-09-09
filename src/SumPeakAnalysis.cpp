@@ -35,6 +35,7 @@ int main(int argc, char **argv)
 
         // Background subtraction
         BGUtils *bg_utils = new BGUtils(inputs);
+        bg_utils->OptimizeBGScaling(false);
         bg_utils->SubtractAllBackground();
 
         /*

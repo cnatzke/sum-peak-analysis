@@ -44,9 +44,18 @@ void BGUtils::SubtractAllBackground()
 
     // subtract time-random coincidences
     file_man->CreateOutputFile("outputs.root");
+    TFile* out_file = file_man->output_file;
 
-    SubtractTimeRandomBg("source");
-    SubtractTimeRandomBg("background");
+    SubtractTimeRandomBg("source", out_file);
+    SubtractTimeRandomBg("background", out_file);
+
+    SubtractAngleDependentBg(out_file);
+
+    std::cout << "Histograms written to file: " << out_file->GetName() << std::endl;
+    out_file->Close();
+
+    // cleaning up
+    delete out_file;
 
 
     /*
@@ -62,10 +71,9 @@ void BGUtils::SubtractAllBackground()
 /************************************************************//**
  * Subtracts average time-random background
  ***************************************************************/
-void BGUtils::SubtractTimeRandomBg(std::string file_type)
+void BGUtils::SubtractTimeRandomBg(std::string file_type, TFile *out_file)
 {
     TFile* hist_file;
-    TFile* out_file = file_man->output_file;
 
     if (file_type.compare("source") == 0) {
         hist_file = file_man->src_file;
@@ -78,8 +86,9 @@ void BGUtils::SubtractTimeRandomBg(std::string file_type)
     }
 
     // change into output file for writing matrices
-    TDirectory* prompt_dir = out_file->mkdir(file_type.c_str());
-    prompt_dir->cd();
+    out_file->cd();
+    TDirectory *target_dir = out_file->mkdir(file_type.c_str());
+    target_dir->cd();
     // loop through each angular index
     for (auto i = 0; i < angle_indices; i++) {
         std::cout << "Subtracting time-random background of " << file_type << " file: " << i + 1 << " of " << angle_indices << "\r";
@@ -99,29 +108,21 @@ void BGUtils::SubtractTimeRandomBg(std::string file_type)
     std::cout << std::endl;
 
     hist_file->Close();
-    out_file->Close();
 
     // cleaning up
-    //delete prompt_dir; // causes segfault, not sure why
-    //delete hist_file;
-    //delete out_file;
+    delete hist_file;
 
     return;
 
 } // SubtractTimeRandomBg()
 
-/*
-   void BGUtils::SubtractAngleDependentBg(){
-    // create matrices for each angular index
-    MakeAngleHistograms();
-
-    TFile* histogram_file = new TFile("diagnostics/channel_histograms.root", "UPDATE");
-    TFile* out_file = new TFile("bg_subtracted_histograms.root", "RECREATE");
-    if (histogram_file->IsZombie()) {
-        std::cerr << "Cannot open histogram file. Exiting." << std::endl;
-        exit(-1);
-    }
-
+/************************************************************//**
+ * Subtracts scaled room background_file
+ *
+ * @param out_file output root file
+ ***************************************************************/
+void BGUtils::SubtractAngleDependentBg(TFile *out_file)
+{
     // read in bg scale factors
     std::string bg_scale_filename = "bg_index_scaling.csv";
     std::fstream bg_scale_file;
@@ -147,49 +148,57 @@ void BGUtils::SubtractTimeRandomBg(std::string file_type)
     // Try to find optimal bg subtraction factors by fitting a line
     if (optimize_values) {
         std::cout << "Optimizing background subtraction factors ..." << std::endl;
-    } else {
-        std::cout << "Subtracting room background ..." << std::endl;
     }
-    int num_channels = 51;
+
     int bg_peak = 1460;
     float bg_scaling_factor = 1.0;
-    float bg_scaling_factor_init = 1.0;
-    TH1D* src_h;
-    TH1D* bg_h;
-    TH1D* total = new TH1D("total", "Sum of All angles", 3000, 0, 3000);
-    out_file->cd();
-    for (auto i=0; i < num_channels; i++) {
-        src_h = (TH1D*)histogram_file->Get(Form("source_%02i", i + 1));
-        bg_h = (TH1D*)histogram_file->Get(Form("bg_%02i", i + 1));
+    float bg_scaling_factor_init = bg_scaling_factor;
+    //TH1D* total = new TH1D("total", "Sum of All angles", 3000, 0, 3000);
+
+    // create directory for subtracted histograms
+    TDirectory* target_dir = (TDirectory*) out_file->mkdir("room_background_subtracted");
+    target_dir->cd();
+
+    for (auto i=0; i < angle_indices; i++) {
+
+        std::cout << "Subtracting scaled room background for index: " << i + 1 << " of " << angle_indices << "\r";
+        std::cout.flush();
+
+        TH1D *src_h = (TH1D*)out_file->Get(Form("source/index_%02i_sum", i));
+        TH1D* bg_h = (TH1D*)out_file->Get(Form("background/index_%02i_sum", i));
 
         if (optimize_values) {
             bg_scaling_factor = OptimizeBGScaleFactor(src_h, bg_h, bg_peak, bg_scaling_factor_init, 100);
             if (bg_scaling_factor == bg_scaling_factor_init) {
-                std::cerr << "  Could not optimize index: " << i + 1 << std::endl;
+                std::cerr << "  Could not optimize index: " << i << std::endl;
             }
             // Subtract background angle by angle
             src_h->Add(bg_h, -1.0 * bg_scaling_factor);
             // write factors to file
-            bg_scale_file << i + 1 << "," << bg_scaling_factor << std::endl;
+            bg_scale_file << i << "," << bg_scaling_factor << std::endl;
         } else {
             // Subtract background angle by angle
+            // need to add one since bg factor file indexed from 1
             src_h->Add(bg_h, -1.0 * bg_scaling_factors_map[i + 1]);
         }
-        total->Add(src_h, 1.0);
-        src_h->Write(Form("source_%02i", i + 1));
+        //total->Add(src_h, 1.0);
+
+        src_h->Write(Form("source_%02i", i));
+
+        // cleaning up
+        delete src_h;
+        delete bg_h;
     }
-    total->Write();
+    std::cout << std::endl;
+    //total->Write();
 
     // Create angle-sum_energy matrix
-    CreateAngleMatrix(out_file);
+    //CreateAngleMatrix(out_file);
 
-    std::cout << "Background subtracted histograms written to: " << out_file->GetName() << std::endl;
-    histogram_file->Close();
-    out_file->Close();
     if (optimize_values) bg_scale_file.close();
-   }
+}
 
-   float BGUtils::OptimizeBGScaleFactor(TH1D* src_h, TH1D* bg_h, int peak, float init_guess, float steps){
+float BGUtils::OptimizeBGScaleFactor(TH1D* src_h, TH1D* bg_h, int peak, float init_guess, float steps){
     // Attempt to optimize bg scale factors by fitting line to region to minimize Chi2
     float current_guess, best_guess;
     float current_chi2, best_chi2;
@@ -232,102 +241,60 @@ void BGUtils::SubtractTimeRandomBg(std::string file_type)
     }
 
     return best_guess;
-   } // end OptimizeBGScaleFactors
+}    // end OptimizeBGScaleFactors
 
+/*
    void BGUtils::CreateAngleMatrix(TFile *histogram_file){
-    // Takes TH1's and creates a TH2
-    TH2D *angle_matrix = new TH2D("angle_matrix", ";Angular Index;Energy [keV]", 70, 0, 70, 3000, 0, 3000);
-    TH1D *angle_hist;
+   // Takes TH1's and creates a TH2
+   TH2D *angle_matrix = new TH2D("angle_matrix", ";Angular Index;Energy [keV]", 70, 0, 70, 3000, 0, 3000);
+   TH1D *angle_hist;
 
-    for (auto i = 1; i < angle_indices + 1; i++) {
-        angle_hist = (TH1D*)histogram_file->Get(Form("source_%02i", i));
-        for (auto my_bin = 0; my_bin < angle_hist->GetXaxis()->GetNbins() + 1; my_bin++) {
-            double val = angle_hist->GetBinContent(my_bin);
-            double val_error = angle_hist->GetBinError(my_bin);
-            // Fill TH2D
-            angle_matrix->SetBinContent(i, my_bin, val);
-            angle_matrix->SetBinError(i, my_bin, val_error);
-        } // end bin loop
-    } // end index loop
+   for (auto i = 1; i < angle_indices + 1; i++) {
+     angle_hist = (TH1D*)histogram_file->Get(Form("source_%02i", i));
+     for (auto my_bin = 0; my_bin < angle_hist->GetXaxis()->GetNbins() + 1; my_bin++) {
+         double val = angle_hist->GetBinContent(my_bin);
+         double val_error = angle_hist->GetBinError(my_bin);
+         // Fill TH2D
+         angle_matrix->SetBinContent(i, my_bin, val);
+         angle_matrix->SetBinError(i, my_bin, val_error);
+     } // end bin loop
+   } // end index loop
 
-    histogram_file->cd();
-    angle_matrix->Write("index_energy_matrix");
+   histogram_file->cd();
+   angle_matrix->Write("index_energy_matrix");
 
-    return;
+   return;
 
    } // end CreateAngleMatrix
 
    void BGUtils::MakeAngleHistograms(){
-    // Subtracts angle dependent background
-    TH2D* source_matrix = (TH2D*)source_file->Get("sum_energy_angle");
-    TH2D* bg_matrix = (TH2D*)bg_file->Get("sum_energy_angle");
-    TFile* out_file = new TFile("diagnostics/channel_histograms.root", "RECREATE");
-    TH1D *my_source_projection;
-    TH1D *my_bg_projection;
-    //TPeakFitter* pf;
-    //* peak;
-    // peak_list[3] = {1460, 1729, 2614};
-    for (auto index = 0; index < source_matrix->GetNbinsX(); index++) {
-        my_source_projection = source_matrix->ProjectionY(Form("source_%02i", index), index, index);
-        my_bg_projection = bg_matrix->ProjectionY(Form("bg_%02i", index), index, index);
-        if ((my_source_projection->GetEntries() < 100) || (my_bg_projection->GetEntries() < 100)) {
-            continue;
-        }
+   // Subtracts angle dependent background
+   TH2D* source_matrix = (TH2D*)source_file->Get("sum_energy_angle");
+   TH2D* bg_matrix = (TH2D*)bg_file->Get("sum_energy_angle");
+   TFile* out_file = new TFile("diagnostics/channel_histograms.root", "RECREATE");
+   TH1D *my_source_projection;
+   TH1D *my_bg_projection;
+   //TPeakFitter* pf;
+   //* peak;
+   // peak_list[3] = {1460, 1729, 2614};
+   for (auto index = 0; index < source_matrix->GetNbinsX(); index++) {
+     my_source_projection = source_matrix->ProjectionY(Form("source_%02i", index), index, index);
+     my_bg_projection = bg_matrix->ProjectionY(Form("bg_%02i", index), index, index);
+     if ((my_source_projection->GetEntries() < 100) || (my_bg_projection->GetEntries() < 100)) {
+         continue;
+     }
 
-        // Write projections to file
-        out_file->cd();
-        my_source_projection->Write();
-        my_bg_projection->Write();
-    }
-    out_file->Close();
-
-    return;
-   } // end SubtractAngleDependentBg()
-
-   void BGUtils::FindAvgTimeRandom(TFile *histogram_file)
-   {
-    TH2D* time_random_matrix;
-    TH1D* average_histogram;
-    TH1D* proj_hist;
-    int slice_width = 30;
-    int slice_edges[5] = {510, 617, 725, 832, 940};
-
-
-    // open histogram file to write averaged histograms
-    TFile *in_file = new TFile(histogram_file->GetName(), "READ");
-    TFile *out_file = new TFile("average_time_random.root", "RECREATE");
-
-    // loop through each angular index
-    for (auto i = 0; i < angle_indices; i++) {
-        average_histogram = NULL;
-        time_random_matrix = (TH2D*) histogram_file->Get(Form("time_random/index_%02i_sum_tr", i));
-
-        for (unsigned int my_slice = 0; my_slice < sizeof(slice_edges)/sizeof(slice_edges[0]); my_slice++) {
-            // get 30 ns slice
-            time_random_matrix->GetYaxis()->SetRangeUser(slice_edges[my_slice], slice_edges[my_slice] + slice_width);
-            proj_hist = time_random_matrix->ProjectionX();
-            if (average_histogram == NULL) {
-                average_histogram = proj_hist;
-                average_histogram->Sumw2();
-            } else {
-                average_histogram->Add(proj_hist, 1.0);
-            }
-        } // end slice loop
-        // scale by 1/5 for averaging
-        //average_histogram->Scale( 1 / 5.0 );
-
-        out_file->cd();
-        average_histogram->Write(Form("index_%i_tr_avg", i));
-    } // end index loop
-    out_file->Close();
-    in_file->Close();
-
-    std::cout << "Time-random histograms written to: " << out_file->GetName() << std::endl;
-
-    return;
-   } // end FindAvgTimeRandom()
-
-   void BGUtils::OptimizeBGScaling(bool optimize){
-    optimize_values = optimize;
+     // Write projections to file
+     out_file->cd();
+     my_source_projection->Write();
+     my_bg_projection->Write();
    }
+   out_file->Close();
+
+   return;
+   } // end SubtractAngleDependentBg()
  */
+
+void BGUtils::OptimizeBGScaling(bool optimize){
+    optimize_values = optimize;
+}
