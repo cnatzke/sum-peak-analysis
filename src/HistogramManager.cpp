@@ -17,7 +17,8 @@
 /************************************************************//**
  * Constructor
  ***************************************************************/
-HistogramManager::HistogramManager(){
+HistogramManager::HistogramManager(FileHandler * file_man) : file_man(file_man)
+{
     // std::cout << "Histogram manager initialized" << std::endl;
 }
 
@@ -29,111 +30,85 @@ HistogramManager::~HistogramManager(void){
 }
 
 /************************************************************//**
- * Creates and Fills histograms
+ * Builds angular matrices
  *
- * @param verbose Verbosity level
+ * @param
  ***************************************************************/
-void HistogramManager::BuildAngularMatrices(TFile *source_file, TFile *bg_file, std::map<int, float> bg_scaling_factors_map)
-{
-    int verbosity = 1;
-    Int_t angle_indices = 51;
-    Int_t gate_low = 1750;
-    Int_t gate_high = 1800;
+void HistogramManager::BuildAngularMatrix(std::string selector){
 
-    bg_scaling_factors_map = bg_scaling_factors_map;
-    LoadHistogramFile(source_file, "source");
-    LoadHistogramFile(bg_file, "background");
+    if (selector.compare("source") == 0) {
+        std::cout << "Building source matrix" << std::endl;
+    } else if (selector.compare("background") == 0) {
+        std::cout << "Building background matrix" << std::endl;
+    } else {
+        std::cerr << "Unknown file designation: " << selector << std::endl;
+        std::cerr << "Exiting ..." << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
-    // create output file and make required directories
-    out_file = new TFile("test.root", "RECREATE");
-    bg_dir = out_file->mkdir("bg_subtracted");
-    gated_dir = out_file->mkdir("sum_energy_gated");
-    TH2D *angle_matrix = new TH2D("angle_matrix", Form("#gamma_1 gated %i-%i;Angular Index;Energy [keV]", gate_low, gate_high), 70, 0, 70, 3000, 0, 3000);
-    // making sure errors are correctly calculated
-    angle_matrix->Sumw2();
+} // end BuildAngularMatrix
+
+/************************************************************//**
+ * Builds sum-peak gated angular matrix
+ *
+ * @param
+ ***************************************************************/
+void HistogramManager::BuildGatedAngularMatrix(float gate_center){
+
+    int gate_range_high = 10;
+    int gate_range_low = 10;
+
+    TFile * out_file = file_man->output_file;
+    //TH2D * angle_matrix = new TH2D("angle_matrix", "Sum Energy;Cos(#theta); Energy [keV]", 100, -1.0, 1.0, 3000, 0, 3000);
+    TH2D * angle_matrix = new TH2D("angle_matrix", "Sum Energy;Index;Energy [keV]", 55, 0, 55, 3000, 0, 3000);
+    TH2D * gated_angle_matrix = new TH2D("gated_angle_matrix", Form("#gamma_{1} %i-%i;Cos(#theta); Energy [keV]", static_cast<int>(gate_center - gate_range_low), static_cast<int>(gate_center + gate_range_high)),100, -1.0, 1.0, 3000, 0, 3000);
+    // make sure errors are properly calculated
+    gated_angle_matrix->Sumw2();
+    out_file->cd();
 
     for (auto i = 0; i < angle_indices; i++) {
+        std::cout << "Processing angular index: " << i + 1 << " of " << angle_indices << "\r";
+        std::cout.flush();
+        TH2D *sum_energy_matrix = (TH2D*)out_file->Get(Form("room_background_subtracted/source_%02i", i));
 
-        std::cout << "Processing angular index: " << i << std::endl;
-        TH2D *subtracted_matrix = SubtractRoomBackground(i);
-        TH1D *projected_hist = GetProjection(subtracted_matrix, gate_low, gate_high, i);
+        TH1D *projected_hist = sum_energy_matrix->ProjectionX();
+        //TH1D *projected_hist = GetGatedProjection(sum_energy_matrix, gate_center - gate_range_low, gate_center + gate_range_high, i);
+        //std::cout << projected_hist->GetName() << std::endl;
 
-        // fill angle vs gamma1 matrix
+        double cos_angle = TMath::Cos(angle_combinations_vec.at(i) * degree_to_rad);
+
         for (auto my_bin = 0; my_bin < projected_hist->GetXaxis()->GetNbins() + 1; my_bin++) {
             double val = projected_hist->GetBinContent(my_bin);
             double val_error = projected_hist->GetBinError(my_bin);
             // Fill TH2D
-            angle_matrix->SetBinContent(i, my_bin, val);
+            //angle_matrix->Fill(cos_angle, my_bin, val);
+            angle_matrix->Fill(i, my_bin, val);
             angle_matrix->SetBinError(i, my_bin, val_error);
         } // end bin loop
 
         // cleaning up
-        delete subtracted_matrix;
+        delete sum_energy_matrix;
         delete projected_hist;
-    }
-    angle_matrix->Write("gamma1_energy_matrix_gated");
+    } // end angle index loop
+    std::cout << std::endl;
+    angle_matrix->Write("angle_matrix");
     out_file->Close();
+    std::cout << "Done" << std::endl;
 
-    std::cout << "Histograms written to file: " << out_file->GetName() << std::endl;
-} // GeneraHistogramFile()
+    delete angle_matrix;
+    delete gated_angle_matrix;
 
-/************************************************************//**
- * loads histogram file
- ***************************************************************/
-void HistogramManager::LoadHistogramFile(TFile *file, std::string file_type){
-    if (file_type.compare("source") == 0) {
-        source_file = file;
-    }
-    else if (file_type.compare("background") == 0) {
-        bg_file = file;
-    } else {
-        std::cerr << "Unknown filetype: " << file_type << std::endl;
-    }
-
-} // end LoadHistograms
-
-/************************************************************//**
- * Subtracts room bg
- ***************************************************************/
-TH2D* HistogramManager::SubtractRoomBackground(Int_t index)
-{
-
-    TH2D *src_hist = (TH2D*) source_file->Get(Form("prompt_angle/index_%02i_sum", index));
-    TH2D *bg_hist = (TH2D*) bg_file->Get(Form("prompt_angle/index_%02i_sum", index));
-    TH2D *h = (TH2D*) src_hist->Clone();
-
-    // Making sure errors are propagated correctly
-    src_hist->Sumw2();
-    bg_hist->Sumw2();
-    h->Sumw2();
-
-    // subtracting room bg from spectrum
-    h->Add(bg_hist, -1.0 * bg_scaling_factors_map[index + 1]);
-    angle_matrix_vec.push_back(h);
-
-    // writing resultant histogram to file
-    bg_dir->cd();
-    h->Write(Form("index_%02i_bg_subtracted", index));
-    out_file->cd();
-
-    delete src_hist;
-    delete bg_hist;
-
-    return h;
-}  // end SubtractRoomBackground
+} // end BuildGatedAngularMatrix()
 
 /************************************************************//**
  * Gates on given sum energy and projects out Y axis
  ***************************************************************/
-TH1D* HistogramManager::GetProjection(TH2D *h, Int_t gate_low, Int_t gate_high, Int_t index)
+TH1D* HistogramManager::GetGatedProjection(TH2D *h, Int_t gate_low, Int_t gate_high, Int_t index)
 {
     TH1D* p = h->ProjectionY("p", gate_low, gate_high);
     p->SetName(Form("index_%02i_gated_%i_%i", index, gate_low, gate_high));
     p->SetTitle(";#gamma_1 energy [keV]");
 
-    gated_dir->cd();
-    p->Write();
-    out_file->cd();
     return p;
 } // end GetProjection
 

@@ -20,6 +20,15 @@ FileHandler::FileHandler(std::string source_filepath, std::string bg_filepath)
 } // end Constructor
 
 /************************************************************//**
+ * Constructor 2
+ ***************************************************************/
+FileHandler::FileHandler(std::string histogram_file)
+{
+    LoadFile(histogram_file, "histograms");
+    //std::cout << "FileHandler initialized" << std::endl;
+} // end Constructor 2
+
+/************************************************************//**
  * Destructor
  ***************************************************************/
 FileHandler::~FileHandler(void)
@@ -41,6 +50,9 @@ void FileHandler::LoadFile(std::string filename, std::string type)
     } else if (type.compare("background") == 0) {
         bg_file = new TFile(filename.c_str());
         std::cout << "Found background file: " << bg_file->GetName() << std::endl;
+    } else if (type.compare("histograms") == 0) {
+        hist_file = new TFile(filename.c_str());
+        std::cout << "Found histogram file: " << hist_file->GetName() << std::endl;
     } else {
         std::cerr << "Unknown filetype: " << type << std::endl;
         std::cerr << "Please pass either 'source' or 'background'" << std::endl;
@@ -56,4 +68,15 @@ void FileHandler::LoadFile(std::string filename, std::string type)
 void FileHandler::CreateOutputFile(std::string filename)
 {
     output_file = new TFile(filename.c_str(), "RECREATE");
+} // end CreateOutputFile()
+
+/************************************************************//**
+ * Opens output file
+ *
+ * @param filename name of output file
+ ***************************************************************/
+TFile * FileHandler::OpenOutputFile(std::string filename)
+{
+    TFile * file = new TFile(filename.c_str(), "UPDATE");
+    return file;
 } // end CreateOutputFile()

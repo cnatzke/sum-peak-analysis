@@ -25,8 +25,22 @@ int main(int argc, char **argv)
         PrintUsage(argv);
         return 0;
     }
+    else if (argc == 2) {
+        FileHandler * inputs = new FileHandler(argv[1]);
 
-    if (argc == 3) {
+        // Create basic angular histograms
+        HistogramManager * hist_man = new HistogramManager(inputs);
+        hist_man->BuildAngularMatrix("source");
+        hist_man->BuildAngularMatrix("background");
+
+        // sum peak gating
+        //HistogramManager *hist_man = new HistogramManager(inputs);
+        //hist_man->BuildGatedAngularMatrix(1770);
+
+        delete inputs;
+        delete hist_man;
+    }
+    else if (argc == 3) {
         InitGRSISort();
         // makes output look nicer
         std::cout << std::endl;
@@ -35,20 +49,8 @@ int main(int argc, char **argv)
 
         // Background subtraction
         BGUtils *bg_utils = new BGUtils(inputs);
-        bg_utils->OptimizeBGScaling(false);
+        //bg_utils->OptimizeBGScaling(true);
         bg_utils->SubtractAllBackground();
-
-        /*
-           // Background subtraction
-           BGUtils *bg_utils = new BGUtils(source_file, bg_file);
-           bg_utils->OptimizeBGScaling(false);
-           bg_utils->SubtractAllBackground();
-           std::map<int, float> bg_scaling_factors_map = bg_utils->GetBgScalingFactors();
-
-           // sum peak gating
-           HistogramManager *hist_man = new HistogramManager();
-           hist_man->BuildAngularMatrices(source_file, bg_file, bg_scaling_factors_map);
-         */
 
         // cleaning up
         delete inputs;
@@ -75,8 +77,12 @@ void InitGRSISort(){
  *****************************************************************************/
 void PrintUsage(char* argv[]){
     std::cerr << argv[0] << " Version: " << SumPeakAnalysis_VERSION_MAJOR << "." << SumPeakAnalysis_VERSION_MINOR << "\n"
+              << "\n----- Background Subtractions ------\n"
               << "usage: " << argv[0] << " source_file background_file \n"
               << " source_file: Source histograms\n"
-              << " background_file: Background histograms"
+              << " background_file: Background histograms\n"
+              << "\n----- Matrix Creation ------\n"
+              << "usage: " << argv[0] << " histogram_file\n"
+              << " histogram_file: ROOT file containing background subtracted histograms\n"
               << std::endl;
 } // end PrintUsage

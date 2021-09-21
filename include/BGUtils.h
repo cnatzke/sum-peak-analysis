@@ -22,8 +22,7 @@ public:
     void SubtractAngleDependentBg(TFile *out_file);
 
     void SubtractAngleDependentBg();
-    void CreateAngleMatrix(TFile *histogram_file);
-    float OptimizeBGScaleFactor(TH1D* src_h, TH1D* bg_h, int peak, float init_guess, float steps = 100);
+    float OptimizeBGScaleFactor(TH2D* src_h, TH2D* bg_h, int peak, float init_guess, int i, float steps = 100);
     void OptimizeBGScaling(bool optimize);
     std::map<int, float> GetBgScalingFactors() {return bg_scaling_factors_map;};
 

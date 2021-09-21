@@ -7,25 +7,23 @@
 #include "TGriffin.h"
 #include "TGriffinBgo.h"
 #include "TMath.h"
+#include "FileHandler.h"
 
 class HistogramManager
 {
 public:
-    HistogramManager();
+    HistogramManager(FileHandler *file_man);
     ~HistogramManager();
-    void LoadHistogramFile(TFile *file, std::string file_type);
-    void BuildAngularMatrices(TFile *file, TFile *bg_file, std::map<int, float> bg_scaling_factors_map);
+    void BuildAngularMatrix(std::string selector);
+    void BuildGatedAngularMatrix(float gate_center);
 
 private:
     void PreProcessData();
-    TH2D* SubtractRoomBackground(Int_t index);
-    TH1D* GetProjection(TH2D *h, Int_t gate_low, Int_t gate_high, Int_t index);
+    TH1D* GetGatedProjection(TH2D *h, Int_t gate_low, Int_t gate_high, Int_t index);
 
-    TFile *source_file;
-    TFile *bg_file;
-    TFile *out_file;
-    TDirectory *bg_dir;
-    TDirectory *gated_dir;
+    FileHandler *file_man;
+    int angle_indices = 51;
+
     std::vector<TH2D*> angle_matrix_vec;
     std::vector<TH1D*> gated_projection_vec;
     std::map<int, float> bg_scaling_factors_map;
