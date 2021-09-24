@@ -14,11 +14,12 @@ public:
 
     TFile *src_file;
     TFile *bg_file;
-    TFile *hist_file;
+    std::string hist_file_name;
     TFile *output_file;
 
 private:
     void LoadFile(std::string filename, std::string type);
+    bool FileIsValid(std::string filename);
 
 };
 

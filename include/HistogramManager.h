@@ -15,7 +15,8 @@ public:
     HistogramManager(FileHandler *file_man);
     ~HistogramManager();
     void BuildAngularMatrix(std::string selector);
-    void BuildGatedAngularMatrix(float gate_center);
+    void BuildGatedAngularMatrix(std::string selector, int gate_low, int gate_high);
+    void BuildAllAngularMatrices();
 
 private:
     void PreProcessData();

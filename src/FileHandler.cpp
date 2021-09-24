@@ -51,14 +51,33 @@ void FileHandler::LoadFile(std::string filename, std::string type)
         bg_file = new TFile(filename.c_str());
         std::cout << "Found background file: " << bg_file->GetName() << std::endl;
     } else if (type.compare("histograms") == 0) {
-        hist_file = new TFile(filename.c_str());
-        std::cout << "Found histogram file: " << hist_file->GetName() << std::endl;
+        if (FileIsValid(filename)) {
+            hist_file_name = filename;
+            std::cout << "Found histogram file: " << hist_file_name << std::endl;
+        }
     } else {
         std::cerr << "Unknown filetype: " << type << std::endl;
         std::cerr << "Please pass either 'source' or 'background'" << std::endl;
         exit(EXIT_FAILURE);
     }
 } // end LoadFile
+
+/************************************************************//**
+ * Check root file exists
+ *
+ * @param filename name of ROOT file
+ ***************************************************************/
+bool FileHandler::FileIsValid(std::string filename)
+{
+    TFile f(filename.c_str());
+    if (f.IsOpen()) {
+        f.Close();
+        return true;
+    } else {
+        std::cerr << "ERROR --- Could not open file: " << filename << std::endl;
+        return false;
+    }
+} // end FileIsValid()
 
 /************************************************************//**
  * Created new root file for outputs

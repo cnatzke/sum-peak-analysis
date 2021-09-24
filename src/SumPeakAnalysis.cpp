@@ -30,12 +30,9 @@ int main(int argc, char **argv)
 
         // Create basic angular histograms
         HistogramManager * hist_man = new HistogramManager(inputs);
-        hist_man->BuildAngularMatrix("source");
-        hist_man->BuildAngularMatrix("background");
+        hist_man->BuildAllAngularMatrices();
 
-        // sum peak gating
-        //HistogramManager *hist_man = new HistogramManager(inputs);
-        //hist_man->BuildGatedAngularMatrix(1770);
+        std::cout << "Histograms written to: " << argv[1] << std::endl;
 
         delete inputs;
         delete hist_man;
