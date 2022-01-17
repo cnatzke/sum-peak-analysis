@@ -136,7 +136,7 @@ void BGUtils::SubtractAngleDependentBg(TFile *out_file)
     }
 
     // peak for background fitting
-    int bg_peak = 1460;
+    int bg_peak = 1730;
     float bg_scaling_factor = 1.0;
     float bg_scaling_factor_init = bg_scaling_factor;
 
@@ -185,7 +185,7 @@ float BGUtils::OptimizeBGScaleFactor(TH2D* src_h, TH2D* bg_h, int peak, float in
     float current_guess, best_guess;
     float current_chi2, best_chi2;
     float range_low = 0.5 * init_guess;
-    float range_high = 1.5 * init_guess;
+    float range_high = 2.5 * init_guess;
     best_guess = init_guess;
 
     // calculate step size

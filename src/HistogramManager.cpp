@@ -35,17 +35,26 @@ HistogramManager::~HistogramManager(void){
 void HistogramManager::BuildAllAngularMatrices()
 {
     int gate_low = 1759;
-    int gate_high = 1769;
+    int gate_high = 1765;
+    int bg_gate_low = 1752;
+    int bg_gate_high = 1758;
 
     // sum energy angular matrices
     BuildAngularMatrix("source");
     BuildAngularMatrix("background");
 
-    // gamma 1 angular matrices
-    BuildGatedAngularMatrix("source", 1759, 1769);
-    BuildGatedAngularMatrix("background", 1759, 1769);
-    BuildGatedAngularMatrix("subtracted", 1759, 1769);
-    
+    /*
+        BuildGatedAngularMatrix("source", gate_low, gate_high);
+       BuildGatedAngularMatrix("background", gate_low, gate_high);
+       // room background subtracted
+       BuildGatedAngularMatrix("room_bg_subtracted", gate_low, gate_high);
+       BuildGatedAngularMatrix("compton", bg_gate_low, bg_gate_high);
+     */
+    // single gamma angular matrices
+    BuildSingleGammaMatrices("source", gate_low, gate_high);
+    BuildSingleGammaMatrices("background", gate_low, gate_high);
+    BuildSingleGammaMatrices("room_bg_subtracted", gate_low, gate_high);
+
 } // end BuildAllAngularMatrices
 
 /************************************************************//**
@@ -134,9 +143,17 @@ void HistogramManager::BuildGatedAngularMatrix(std::string selector, int gate_lo
             sum_energy_matrix = (TH2D*)in_file.Get(Form("background/index_%02i_sum", i));
             gated_angle_matrix->SetName("gamma1_matrix_bg");
             gated_angle_matrix->SetTitle("Sum Energy (Background);Angular Index;Energy [keV]");
+        } else if (selector.compare("room_bg_subtracted") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("room_background_subtracted/source_%02i", i));
+            gated_angle_matrix->SetName("gamma1_matrix_src_bg_subtracted");
+            gated_angle_matrix->SetTitle("Sum Energy (Source, Background Subtracted);Angular Index;Energy [keV]");
+        } else if (selector.compare("compton") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("room_background_subtracted/source_%02i", i));
+            gated_angle_matrix->SetName("gamma1_matrix_compton_bg_subtracted");
+            gated_angle_matrix->SetTitle("Sum Energy (Compton, Background Subtracted);Angular Index;Energy [keV]");
         } else {
             sum_energy_matrix = (TH2D*)in_file.Get(Form("room_background_subtracted/source_%02i", i));
-            gated_angle_matrix->SetName("gamma1_matrix_bg_subtracted");
+            gated_angle_matrix->SetName("other");
             gated_angle_matrix->SetTitle("Sum Energy (Source, Background Subtracted);Angular Index;Energy [keV]");
         }
 
@@ -173,6 +190,73 @@ TH1D* HistogramManager::GetGatedProjection(TH2D *h, Int_t gate_low, Int_t gate_h
     return p;
 } // end GetProjection
 
+/************************************************************//**
+ * Builds gamma 2 matrices
+ ***************************************************************/
+void HistogramManager::BuildSingleGammaMatrices(std::string selector, int gate_low, int gate_high){
+
+    TFile in_file(file_man->hist_file_name.c_str(), "UPDATE");
+    TH2D * high_gamma_angle_matrix = new TH2D("high_gamma_angle_matrix", Form("E_high Single #gamma Sum Gated [%i-%i];Angular Index; Energy [keV]", gate_low, gate_high), 55, 0.0, 55, gate_high + 10, 0, gate_high + 10);
+    TH2D * low_gamma_angle_matrix = new TH2D("low_gamma_angle_matrix", Form("E_low Single #gamma Sum Gated [%i-%i];Angular Index; Energy [keV]", gate_low, gate_high), 55, 0.0, 55, gate_high + 10, 0, gate_high + 10);
+    TH2D * total_gamma_angle_matrix = new TH2D("total_gamma_angle_matrix", Form("E_high and E_low Gated [%i-%i];Angular Index; Energy [keV]", gate_low, gate_high), 55, 0.0, 55, gate_high + 10, 0, gate_high + 10);
+    // make sure errors are properly calculated
+    high_gamma_angle_matrix->Sumw2();
+    low_gamma_angle_matrix->Sumw2();
+    total_gamma_angle_matrix->Sumw2();
+
+    TH2D * sum_energy_matrix = NULL;
+    //std::cout << "Building " << selector << " single gamma angular matrices - " << std::endl;
+    for (auto i = 0; i < angle_indices; i++) {
+        std::cout << "Building " << selector << " single gamma angular matrices - index: " << i + 1 << " of " << angle_indices << "\r";
+        std::cout.flush();
+
+        if (selector.compare("source") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("source/index_%02i_sum", i));
+        } else if (selector.compare("background") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("background/index_%02i_sum", i));
+        } else if (selector.compare("room_bg_subtracted") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("room_background_subtracted/source_%02i", i));
+        } else if (selector.compare("compton") == 0) {
+            sum_energy_matrix = (TH2D*)in_file.Get(Form("room_background_subtracted/source_%02i", i));
+        } else {
+            std::cerr << "\n\nUnknown single gamma selector, exiting" << std::endl;
+            exit(EXIT_FAILURE);
+        }
+
+        // Set histogram names
+        high_gamma_angle_matrix->SetName(Form("high_gamma_angle_matrix_%s", selector.c_str()));
+        low_gamma_angle_matrix->SetName(Form("low_gamma_angle_matrix_%s", selector.c_str()));
+        total_gamma_angle_matrix->SetName(Form("total_gamma_angle_matrix_%s", selector.c_str()));
+
+        // restrict range to gated region along sum energy axis (x)
+        for (auto sum_energy_bin = gate_low; sum_energy_bin < gate_high + 1; sum_energy_bin++) {
+            for (auto gamma_energy_bin = 0; gamma_energy_bin < sum_energy_matrix->GetYaxis()->GetNbins() + 1; gamma_energy_bin++) {
+                // get counts in bins
+                double val = sum_energy_matrix->GetBinContent(sum_energy_bin, gamma_energy_bin);
+                //double val_error = sum_energy_matrix->GetBinError(gamma_energy_bin, sum_energy_bin);
+
+                // fill single gamma matrices
+                high_gamma_angle_matrix->Fill(i, gamma_energy_bin, val);
+                low_gamma_angle_matrix->Fill(i, sum_energy_bin - gamma_energy_bin, val);
+                total_gamma_angle_matrix->Fill(i, gamma_energy_bin, val);
+                total_gamma_angle_matrix->Fill(i, sum_energy_bin - gamma_energy_bin, val);
+
+                // I don't think I need to explicity set the error
+                //high_gamma_angle_matrix->SetBinError(i, sum_energy_bin, val_error);
+                //low_gamma_angle_matrix->SetBinError(i, gamma_energy_bin - sum_energy_bin, val_error);
+            }
+        }
+
+        // cleaning up
+        delete sum_energy_matrix;
+    } // end angle index loop
+    std::cout << std::endl;
+    high_gamma_angle_matrix->Write("", TObject::kOverwrite);
+    low_gamma_angle_matrix->Write("", TObject::kOverwrite);
+    total_gamma_angle_matrix->Write("", TObject::kOverwrite);
+    in_file.Close();
+
+} // end BuildSingleGammaMatrices
 
 /************************************************************//**
  * Keep this function in. linking libraries breaks when it is removed; don't know why
